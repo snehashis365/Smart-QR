@@ -1,4 +1,4 @@
-package com.example.smart_qr
+package com.snehashis.qr
 
 import io.flutter.embedding.android.FlutterActivity
 
