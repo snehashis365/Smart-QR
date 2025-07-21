@@ -1,15 +1,11 @@
-// For format details, see https://aka.ms/devcontainer.json.
 {
-	"name": "Flutter Manual Install",
-
-	// We'll still use the same reliable Ubuntu base image.
+	"name": "Flutter Final Install (v3)",
 	"image": "mcr.microsoft.com/devcontainers/base:ubuntu",
 
-	// This command now handles the entire setup process manually.
-	// It's a robust alternative when the 'features' system has issues.
-	"postCreateCommand": "sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev unzip zip && git clone https://github.com/flutter/flutter.git --depth 1 --branch stable /usr/local/flutter && echo 'export PATH=\"$PATH:/usr/local/flutter/bin\"' | sudo tee /etc/profile.d/flutter.sh && sudo chmod +x /etc/profile.d/flutter.sh && flutter precache && flutter doctor",
+	// The command now uses 'sudo' for the flutter commands,
+	// which solves the 'Permission denied' error.
+	"postCreateCommand": "sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev unzip zip && sudo git clone https://github.com/flutter/flutter.git --depth 1 --branch stable /usr/local/flutter && echo 'export PATH=\"$PATH:/usr/local/flutter/bin\"' | sudo tee /etc/profile.d/flutter.sh && sudo chmod +x /etc/profile.d/flutter.sh && sudo /usr/local/flutter/bin/flutter precache && sudo /usr/local/flutter/bin/flutter doctor",
 
-	// Your VS Code customizations will remain the same.
 	"customizations": {
 		"vscode": {
 			"extensions": [
