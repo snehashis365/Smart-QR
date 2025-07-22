@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:smart_qr/history_service.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'dart:async';
+import 'dart:math';
 
 enum QRCodeType { url, wifi, contact, email, phone, sms, text, geo, calendar }
 
@@ -97,10 +98,12 @@ class _ResultPageState extends State<ResultPage> {
       final annotations = await _entityExtractor.annotateText(widget.scannedCode);
       final Set<String> addedActions = {};
 
+      final List<String> foundNames = [];
+      final List<String> foundPhones = [];
+
       for (final annotation in annotations) {
         for (final entity in annotation.entities) {
           final String entityText = annotation.text;
-          final String? entityRawValue = entity.rawValue;
           final EntityType entityType = entity.type;
 
           final String actionKey = '${entityType}_$entityText';
@@ -110,7 +113,7 @@ class _ResultPageState extends State<ResultPage> {
 
           switch (entityType) {
             case EntityType.address:
-              newAction = PulsingSmartButton( // Changed to animated button
+              newAction = SmartAnimatedButton(
                 icon: Icons.map_outlined,
                 label: entityText,
                 onPressed: () => _safeLaunchUrl('https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(entityText)}'),
@@ -118,59 +121,51 @@ class _ResultPageState extends State<ResultPage> {
               break;
 
             case EntityType.phone:
-              String? potentialNumber;
-              if (entityRawValue != null && entityRawValue.startsWith('tel:')) {
-                potentialNumber = entityRawValue;
-              } else {
-                final cleanedText = entityText.replaceAll(RegExp(r'[\s()-]'), '');
-                if (cleanedText.length >= 7 && int.tryParse(cleanedText) != null) {
-                  potentialNumber = 'tel:$cleanedText';
-                }
-              }
-              if (potentialNumber != null) {
-                newAction = PulsingSmartButton( // Changed to animated button
+              final String? launchableNumber = _getLaunchablePhoneNumber(entity, entityText);
+              if (launchableNumber != null) {
+                foundPhones.add(launchableNumber.replaceFirst('tel:', ''));
+
+                _smartActions.add(SmartAnimatedButton(
                   icon: Icons.call_outlined,
                   label: "Call $entityText",
-                  onPressed: () => _safeLaunchUrl(potentialNumber!),
-                );
+                  onPressed: () => _safeLaunchUrl(launchableNumber),
+                ));
+                _smartActions.add(SmartAnimatedButton(
+                  icon: Icons.sms_outlined,
+                  label: "Text $entityText",
+                  onPressed: () => _safeLaunchUrl(launchableNumber.replaceFirst('tel:', 'sms:')),
+                ));
+
+                addedActions.add('${EntityType.phone}_$entityText');
+                addedActions.add('sms_$entityText');
               }
               break;
 
             case EntityType.email:
-              String? potentialEmail;
-              if (entityRawValue != null && entityRawValue.startsWith('mailto:')) {
-                potentialEmail = entityRawValue;
-              } else {
-                final emailRegex = RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$');
-                if (emailRegex.hasMatch(entityText)) {
-                  potentialEmail = 'mailto:$entityText';
-                }
-              }
-              if (potentialEmail != null) {
-                newAction = PulsingSmartButton( // Changed to animated button
+              final String? launchableEmail = _getLaunchableEmail(entity, entityText);
+              if (launchableEmail != null) {
+                newAction = SmartAnimatedButton(
                   icon: Icons.email_outlined,
                   label: "Email $entityText",
-                  onPressed: () => _safeLaunchUrl(potentialEmail!),
+                  onPressed: () => _safeLaunchUrl(launchableEmail),
                 );
               }
               break;
 
             case EntityType.url:
-            // *** FEATURE IMPLEMENTATION: GOOGLE SEARCH FOR URLS ***
-              String? potentialUrl = entityRawValue ?? entityText;
-              if (!potentialUrl.startsWith('http://') && !potentialUrl.startsWith('https://')) {
-                potentialUrl = 'https://$potentialUrl';
-              }
-
-              if (Uri.tryParse(potentialUrl)?.hasAuthority ?? false) {
-                newAction = PulsingSmartButton( // Changed to animated button
-                  icon: Icons.search, // New icon
-                  label: "Verify '$entityText'", // New label
+              final String? urlToSearch = _getLaunchableUrl(entity, entityText);
+              if (urlToSearch != null) {
+                newAction = SmartAnimatedButton(
+                  icon: Icons.search,
+                  label: "Verify '$entityText'",
                   onPressed: () => _safeLaunchUrl('https://www.google.com/search?q=${Uri.encodeComponent(entityText)}'),
                 );
               }
               break;
             default:
+              if (entityType.toString() == 'EntityType.PERSON') {
+                foundNames.add(entityText);
+              }
               break;
           }
 
@@ -180,11 +175,56 @@ class _ResultPageState extends State<ResultPage> {
           }
         }
       }
+
+      if (foundNames.isNotEmpty && foundPhones.isNotEmpty) {
+        _smartActions.add(SmartAnimatedButton(
+          icon: Icons.person_add_alt_1,
+          label: "Add as Contact",
+          onPressed: () => _createContactFromAI(names: foundNames, phones: foundPhones),
+        ));
+      }
+
     } catch (e) {
       debugPrint("ML Kit Error: $e");
     } finally {
       if (mounted) setState(() => _isMlKitRunning = false);
     }
+  }
+
+  Future<void> _createContactFromAI({required List<String> names, required List<String> phones}) async {
+    final contact = Contact();
+    contact.name.first = names.first;
+    contact.phones = phones.map((p) => Phone(p)).toList();
+
+    if (await FlutterContacts.requestPermission()) {
+      await contact.insert();
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Contact saved!')));
+    } else {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Permission denied.')));
+    }
+  }
+
+  String? _getLaunchablePhoneNumber(Entity entity, String text) {
+    if (entity.rawValue != null && entity.rawValue!.startsWith('tel:')) return entity.rawValue;
+    final cleanedText = text.replaceAll(RegExp(r'[\s()-]'), '');
+    if (cleanedText.length >= 7 && int.tryParse(cleanedText) != null) return 'tel:$cleanedText';
+    return null;
+  }
+
+  String? _getLaunchableEmail(Entity entity, String text) {
+    if (entity.rawValue != null && entity.rawValue!.startsWith('mailto:')) return entity.rawValue;
+    final emailRegex = RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$');
+    if (emailRegex.hasMatch(text)) return 'mailto:$text';
+    return null;
+  }
+
+  String? _getLaunchableUrl(Entity entity, String text) {
+    String? potentialUrl = entity.rawValue ?? text;
+    if (!potentialUrl.startsWith('http://') && !potentialUrl.startsWith('https://')) {
+      potentialUrl = 'https://$potentialUrl';
+    }
+    if (Uri.tryParse(potentialUrl)?.hasAuthority ?? false) return potentialUrl;
+    return null;
   }
 
   @override
@@ -392,8 +432,39 @@ class _ResultPageState extends State<ResultPage> {
     _type = QRCodeType.sms;
     _icon = Icons.sms_outlined;
     _title = 'SMS';
-    _content = SelectableText(code.replaceFirst('smsto:', ''));
-    _initialActions.add(FilledButton.tonal(onPressed: () => _safeLaunchUrl(code), child: const Text('Send SMS')));
+
+    String smsData = code.replaceFirst('smsto:', '');
+    String number;
+    String? message;
+
+    if (smsData.contains(':')) {
+      var parts = smsData.split(':');
+      number = parts.first;
+      message = parts.sublist(1).join(':');
+    } else {
+      number = smsData;
+    }
+
+    _content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SelectableText(number, style: Theme.of(context).textTheme.titleLarge),
+        if (message != null && message.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          const Text("Message:", style: TextStyle(fontWeight: FontWeight.bold)),
+          SelectableText(message),
+        ]
+      ],
+    );
+
+    String url;
+    if (message != null && message.isNotEmpty) {
+      url = 'sms:$number?body=${Uri.encodeComponent(message)}';
+    } else {
+      url = 'sms:$number';
+    }
+
+    _initialActions.add(FilledButton.tonal(onPressed: () => _safeLaunchUrl(url), child: const Text('Send SMS')));
   }
 
   void _buildGeoUI(String code) {
@@ -447,62 +518,115 @@ class _ResultPageState extends State<ResultPage> {
   }
 }
 
-// *** FEATURE IMPLEMENTATION: ANIMATED SMART BUTTON ***
-class PulsingSmartButton extends StatefulWidget {
-  final IconData icon;
+class SmartAnimatedButton extends StatefulWidget {
   final String label;
+  final IconData icon;
   final VoidCallback onPressed;
 
-  const PulsingSmartButton({
+  const SmartAnimatedButton({
     super.key,
-    required this.icon,
     required this.label,
+    required this.icon,
     required this.onPressed,
   });
 
   @override
-  State<PulsingSmartButton> createState() => _PulsingSmartButtonState();
+  State<SmartAnimatedButton> createState() => _SmartAnimatedButtonState();
 }
 
-class _PulsingSmartButtonState extends State<PulsingSmartButton> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _animation;
+class _SmartAnimatedButtonState extends State<SmartAnimatedButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _anim;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      duration: const Duration(seconds: 1),
+    _ctrl = AnimationController(
       vsync: this,
-    )..repeat(reverse: true);
-    _animation = Tween<double>(begin: 1.0, end: 1.05).animate(CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeInOut,
-    ));
+      duration: const Duration(seconds: 6),
+    )..repeat();
+
+    _anim = CurvedAnimation(parent: _ctrl, curve: Curves.easeInOutBack);
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _ctrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return ScaleTransition(
-      scale: _animation,
-      child: FilledButton.icon(
-        icon: Icon(widget.icon),
-        label: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Flexible(child: Text(widget.label, overflow: TextOverflow.ellipsis)),
-            const SizedBox(width: 8),
-            const Icon(Icons.auto_awesome, size: 16),
-          ],
-        ),
-        onPressed: widget.onPressed,
-      ),
+    final theme = Theme.of(context);
+
+    return AnimatedBuilder(
+      animation: _anim,
+      builder: (context, child) {
+        return CustomPaint(
+          painter: _SmartBorderPainter(progress: _anim.value),
+          child: Padding(
+            padding: const EdgeInsets.all(4),
+            child: FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor:
+                theme.colorScheme.surfaceContainerHighest,
+                foregroundColor:
+                theme.colorScheme.onSurfaceVariant,
+                padding:
+                const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+              ),
+              icon: Icon(widget.icon),
+              label: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(widget.label),
+                  const SizedBox(width: 8),
+                  const Icon(Icons.auto_awesome, size: 16),
+                ],
+              ),
+              onPressed: widget.onPressed,
+            ),
+          ),
+        );
+      },
     );
+  }
+}
+
+class _SmartBorderPainter extends CustomPainter {
+  final double progress;
+
+  _SmartBorderPainter({required this.progress});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const borderWidth = 3.0;
+    final rect = Offset.zero & size;
+    final path = RRect.fromRectAndRadius(rect, Radius.circular(100))
+        .deflate(borderWidth / 2);
+
+    final paint = Paint()
+      ..shader = SweepGradient(
+        colors: const [
+          Color(0xFFFFA63D),
+          Color(0xFFFF3D77),
+          Color(0xFF338AFF),
+          Color(0xFF3CF0C5),
+          Color(0xFFFFA63D),
+        ],
+        stops: const [0.0, 0.33, 0.66, 0.9, 1.0],
+        transform: GradientRotation(2 * pi * progress),
+      ).createShader(rect)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = borderWidth
+      ..strokeCap = StrokeCap.round;
+
+    canvas.drawRRect(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _SmartBorderPainter oldDelegate) {
+    return oldDelegate.progress != progress;
   }
 }

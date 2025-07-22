@@ -1,30 +1,61 @@
-// lib/main.dart
 import 'package:flutter/material.dart';
-import 'package:smart_qr/favorites_page.dart'; // <-- ADD THIS
+import 'package:provider/provider.dart';
+import 'package:dynamic_color/dynamic_color.dart';
+import 'package:smart_qr/favorites_page.dart';
 import 'package:smart_qr/history_page.dart';
 import 'package:smart_qr/scan_page.dart';
+import 'package:smart_qr/settings_page.dart';
+import 'package:smart_qr/theme_provider.dart';
 
-// ... (MyApp class is the same) ...
 void main() {
-  runApp(const MyApp());
+  runApp(
+    ChangeNotifierProvider(
+      create: (context) => ThemeProvider(),
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
+  static final _defaultLightColorScheme = ColorScheme.fromSeed(seedColor: Colors.blue);
+  static final _defaultDarkColorScheme = ColorScheme.fromSeed(seedColor: Colors.blue, brightness: Brightness.dark);
+
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Smart QR',
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-      ),
-      home: const AppShell(),
+    return DynamicColorBuilder(
+      builder: (lightDynamic, darkDynamic) {
+        final themeProvider = Provider.of<ThemeProvider>(context);
+
+        ColorScheme lightColorScheme;
+        ColorScheme darkColorScheme;
+
+        if (themeProvider.useDynamicColor && lightDynamic != null && darkDynamic != null) {
+          lightColorScheme = lightDynamic;
+          darkColorScheme = darkDynamic;
+        } else {
+          lightColorScheme = _defaultLightColorScheme;
+          darkColorScheme = _defaultDarkColorScheme;
+        }
+
+        return MaterialApp(
+          title: 'Smart QR',
+          themeMode: themeProvider.themeMode,
+          theme: ThemeData(
+            colorScheme: lightColorScheme,
+            useMaterial3: true,
+          ),
+          darkTheme: ThemeData(
+            colorScheme: darkColorScheme,
+            useMaterial3: true,
+          ),
+          home: const AppShell(),
+        );
+      },
     );
   }
 }
-
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key});
@@ -36,12 +67,12 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   int _selectedIndex = 0;
 
-  // --- UPDATE THE LIST OF PAGES ---
+  // Updated the list to include the real settings page
   static const List<Widget> _pages = <Widget>[
     ScanPage(),
     HistoryPage(),
-    FavoritesPage(), // <-- REPLACE THE PLACEHOLDER
-    Icon(Icons.settings, size: 150),
+    FavoritesPage(),
+    SettingsPage(), // <-- Correctly placed here
   ];
 
   void _onItemTapped(int index) {
@@ -52,7 +83,6 @@ class _AppShellState extends State<AppShell> {
 
   @override
   Widget build(BuildContext context) {
-    // ... (The build method and BottomNavigationBar remain the same) ...
     return Scaffold(
       body: Center(
         child: _pages.elementAt(_selectedIndex),

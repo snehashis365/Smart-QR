@@ -30,6 +30,12 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+
+  #UI
+  # For Material You / dynamic color theming
+  dynamic_color: ^1.7.0
+  # For simple state management of the theme
+  provider: ^6.1.5
     
   # For the QR code scanner view
   mobile_scanner: ^7.0.1
