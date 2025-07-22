@@ -46,7 +46,7 @@ dependencies:
   share_plus: ^11.0.0
 
   #ML Part
-  google_ml_kit: ^0.20.0
+  #google_ml_kit: ^0.20.0
   google_mlkit_entity_extraction: ^0.15.1
 
   # The following adds the Cupertino Icons font to your application.
@@ -57,6 +57,7 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   change_app_package_name: ^1.5.0
+  rename: ^3.1.0
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
