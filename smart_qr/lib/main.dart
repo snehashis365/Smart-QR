@@ -1,8 +1,10 @@
+// lib/main.dart
 import 'package:flutter/material.dart';
-// We will create these files in the next step
+import 'package:smart_qr/favorites_page.dart'; // <-- ADD THIS
 import 'package:smart_qr/history_page.dart';
 import 'package:smart_qr/scan_page.dart';
 
+// ... (MyApp class is the same) ...
 void main() {
   runApp(const MyApp());
 }
@@ -15,7 +17,6 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Smart QR',
       theme: ThemeData(
-        // This enables the modern Material 3 design
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
       ),
@@ -23,6 +24,7 @@ class MyApp extends StatelessWidget {
     );
   }
 }
+
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key});
@@ -32,14 +34,14 @@ class AppShell extends StatefulWidget {
 }
 
 class _AppShellState extends State<AppShell> {
-  int _selectedIndex = 0; // The first tab is "Scan"
+  int _selectedIndex = 0;
 
-  // List of the pages to be displayed
+  // --- UPDATE THE LIST OF PAGES ---
   static const List<Widget> _pages = <Widget>[
     ScanPage(),
     HistoryPage(),
-    Icon(Icons.favorite, size: 150), // Placeholder for Favorites
-    Icon(Icons.settings, size: 150), // Placeholder for Settings
+    FavoritesPage(), // <-- REPLACE THE PLACEHOLDER
+    Icon(Icons.settings, size: 150),
   ];
 
   void _onItemTapped(int index) {
@@ -50,12 +52,12 @@ class _AppShellState extends State<AppShell> {
 
   @override
   Widget build(BuildContext context) {
+    // ... (The build method and BottomNavigationBar remain the same) ...
     return Scaffold(
       body: Center(
         child: _pages.elementAt(_selectedIndex),
       ),
       bottomNavigationBar: BottomNavigationBar(
-        // This makes the icons and labels of unselected items visible
         type: BottomNavigationBarType.fixed,
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(

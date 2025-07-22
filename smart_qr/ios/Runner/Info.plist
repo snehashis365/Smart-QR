@@ -45,5 +45,7 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSContactsUsageDescription</key>
+    <string>This app needs contacts access to save new contacts from QR codes.</string>
 </dict>
 </plist>

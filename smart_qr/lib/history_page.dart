@@ -19,18 +19,43 @@ class _HistoryPageState extends State<HistoryPage> {
     _loadHistory();
   }
 
+  // Reloads the history from storage and updates the UI
   Future<void> _loadHistory() async {
     final history = await HistoryService.getHistory();
-    setState(() {
-      _history = history;
-    });
+    if (mounted) {
+      setState(() {
+        _history = history;
+      });
+    }
   }
 
-  Future<void> _clearHistory() async {
-    await HistoryService.clearHistory();
-    _loadHistory(); // Refresh the UI
+  // Shows a confirmation dialog before clearing all history
+  Future<void> _confirmAndClearHistory() async {
+    final bool? shouldClear = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: const Text('Clear History?'),
+        content: const Text('This will permanently delete all scanned items.'),
+        actions: <Widget>[
+          TextButton(
+            child: const Text('Cancel'),
+            onPressed: () => Navigator.of(context).pop(false),
+          ),
+          TextButton(
+            child: const Text('Clear'),
+            onPressed: () => Navigator.of(context).pop(true),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldClear == true) {
+      await HistoryService.clearHistory();
+      _loadHistory(); // Refresh the UI
+    }
   }
 
+  // Determines the correct icon to display for a given QR code type
   IconData _getIconForCode(String code) {
     if (code.startsWith('http')) return Icons.link;
     if (code.startsWith('WIFI:')) return Icons.wifi;
@@ -49,46 +74,53 @@ class _HistoryPageState extends State<HistoryPage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.delete_outline),
-            onPressed: _history.isEmpty ? null : _clearHistory,
+            // Disable the button if there's no history to clear
+            onPressed: _history.isEmpty ? null : _confirmAndClearHistory,
           ),
         ],
       ),
       body: _history.isEmpty
           ? const Center(child: Text('No history yet.'))
           : ListView.builder(
-              itemCount: _history.length,
-              itemBuilder: (context, index) {
-                final item = _history[index];
-                return Card(
-                  margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
-                  child: ListTile(
-                    leading: CircleAvatar(
-                      child: Icon(_getIconForCode(item.code)),
-                    ),
-                    title: Text(
-                      item.code,
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
-                    ),
-                    subtitle: Text(
-                      '${DateFormat.yMd().add_Hms().format(item.timestamp)}, QR_CODE'
-                    ),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.favorite_border),
-                      onPressed: () { /* TODO: Add to favorites logic */ },
-                    ),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => ResultPage(scannedCode: item.code),
-                        ),
-                      ).then((_) => _loadHistory()); // Refresh history when returning
-                    },
+        itemCount: _history.length,
+        itemBuilder: (context, index) {
+          final item = _history[index];
+          return Card(
+            margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
+            child: ListTile(
+              leading: CircleAvatar(
+                child: Icon(_getIconForCode(item.code)),
+              ),
+              title: Text(
+                item.code,
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+              subtitle: Text(
+                DateFormat.yMd().add_Hms().format(item.timestamp),
+              ),
+              trailing: IconButton(
+                icon: Icon(
+                  item.isFavorite ? Icons.favorite : Icons.favorite_border,
+                  color: item.isFavorite ? Colors.redAccent : null,
+                ),
+                onPressed: () async {
+                  await HistoryService.toggleFavorite(item.id);
+                  _loadHistory(); // Refresh the list
+                },
+              ),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ResultPage(scannedCode: item.code, historyId: item.id),
                   ),
-                );
+                ).then((_) => _loadHistory());
               },
             ),
+          );
+        },
+      ),
     );
   }
 }

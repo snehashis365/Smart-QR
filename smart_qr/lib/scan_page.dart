@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import 'package:smart_qr/result_page.dart'; // We will create this next
+import 'package:smart_qr/result_page.dart';
+import 'package:smart_qr/history_service.dart';
 
 class ScanPage extends StatefulWidget {
   const ScanPage({super.key});
@@ -28,7 +29,7 @@ class _ScanPageState extends State<ScanPage> {
           // The main camera scanner view
           MobileScanner(
             controller: controller,
-            onDetect: (capture) {
+            onDetect: (capture) async {
               // Avoid processing if we're already on it
               if (isProcessing) return;
 
@@ -40,17 +41,22 @@ class _ScanPageState extends State<ScanPage> {
                     isProcessing = true;
                   });
 
-                  // Navigate to the result page with the scanned code
+                  // --- UPDATE SCAN LOGIC ---
+                  // Add to history first to get an ID
+                  await HistoryService.addToHistory(code);
+                  // Find the newly created item to pass its ID
+                  final history = await HistoryService.getHistory();
+                  final newItem = history.firstWhere((item) => item.code == code, orElse: () => history.first);
+
+                  if (!mounted) return;
+
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => ResultPage(scannedCode: code),
+                      builder: (context) => ResultPage(scannedCode: code, historyId: newItem.id),
                     ),
                   ).then((_) {
-                    // When we return from the result page, allow scanning again
-                    setState(() {
-                      isProcessing = false;
-                    });
+                    setState(() { isProcessing = false; });
                   });
                 }
               }
