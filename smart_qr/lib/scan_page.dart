@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:smart_qr/result_page.dart';
-import 'package:smart_qr/history_service.dart';
 
 class ScanPage extends StatefulWidget {
   const ScanPage({super.key});
@@ -11,9 +10,8 @@ class ScanPage extends StatefulWidget {
 }
 
 class _ScanPageState extends State<ScanPage> {
-  // Controller for the mobile scanner
   final MobileScannerController controller = MobileScannerController();
-  bool isProcessing = false; // To prevent multiple navigations
+  bool isProcessing = false;
 
   @override
   void dispose() {
@@ -26,11 +24,9 @@ class _ScanPageState extends State<ScanPage> {
     return Scaffold(
       body: Stack(
         children: [
-          // The main camera scanner view
           MobileScanner(
             controller: controller,
-            onDetect: (capture) async {
-              // Avoid processing if we're already on it
+            onDetect: (capture) {
               if (isProcessing) return;
 
               final List<Barcode> barcodes = capture.barcodes;
@@ -41,28 +37,22 @@ class _ScanPageState extends State<ScanPage> {
                     isProcessing = true;
                   });
 
-                  // --- UPDATE SCAN LOGIC ---
-                  // Add to history first to get an ID
-                  await HistoryService.addToHistory(code);
-                  // Find the newly created item to pass its ID
-                  final history = await HistoryService.getHistory();
-                  final newItem = history.firstWhere((item) => item.code == code, orElse: () => history.first);
-
-                  if (!mounted) return;
-
+                  // Just navigate directly. The result page will handle saving.
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => ResultPage(scannedCode: code, historyId: newItem.id),
+                      builder: (context) => ResultPage(scannedCode: code),
                     ),
                   ).then((_) {
-                    setState(() { isProcessing = false; });
+                    // When we return from the result page, allow scanning again
+                    setState(() {
+                      isProcessing = false;
+                    });
                   });
                 }
               }
             },
           ),
-          // A semi-transparent overlay with a square cutout for scanning
           Center(
             child: Container(
               width: 250,

@@ -19,7 +19,6 @@ class _HistoryPageState extends State<HistoryPage> {
     _loadHistory();
   }
 
-  // Reloads the history from storage and updates the UI
   Future<void> _loadHistory() async {
     final history = await HistoryService.getHistory();
     if (mounted) {
@@ -29,7 +28,6 @@ class _HistoryPageState extends State<HistoryPage> {
     }
   }
 
-  // Shows a confirmation dialog before clearing all history
   Future<void> _confirmAndClearHistory() async {
     final bool? shouldClear = await showDialog<bool>(
       context: context,
@@ -51,11 +49,10 @@ class _HistoryPageState extends State<HistoryPage> {
 
     if (shouldClear == true) {
       await HistoryService.clearHistory();
-      _loadHistory(); // Refresh the UI
+      _loadHistory();
     }
   }
 
-  // Determines the correct icon to display for a given QR code type
   IconData _getIconForCode(String code) {
     if (code.startsWith('http')) return Icons.link;
     if (code.startsWith('WIFI:')) return Icons.wifi;
@@ -74,7 +71,6 @@ class _HistoryPageState extends State<HistoryPage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.delete_outline),
-            // Disable the button if there's no history to clear
             onPressed: _history.isEmpty ? null : _confirmAndClearHistory,
           ),
         ],
@@ -104,9 +100,12 @@ class _HistoryPageState extends State<HistoryPage> {
                   item.isFavorite ? Icons.favorite : Icons.favorite_border,
                   color: item.isFavorite ? Colors.redAccent : null,
                 ),
-                onPressed: () async {
-                  await HistoryService.toggleFavorite(item.id);
-                  _loadHistory(); // Refresh the list
+                onPressed: () {
+                  // FIX: Update the in-memory list for instant UI feedback
+                  HistoryService.toggleFavorite(item.id);
+                  setState(() {
+                    item.isFavorite = !item.isFavorite;
+                  });
                 },
               ),
               onTap: () {
@@ -115,7 +114,7 @@ class _HistoryPageState extends State<HistoryPage> {
                   MaterialPageRoute(
                     builder: (context) => ResultPage(scannedCode: item.code, historyId: item.id),
                   ),
-                ).then((_) => _loadHistory());
+                ).then((_) => _loadHistory()); // Refresh when returning from details
               },
             ),
           );

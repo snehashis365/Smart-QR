@@ -22,10 +22,13 @@ class HistoryItem {
     'isFavorite': isFavorite,
   };
 
+  // --- THIS IS THE CRITICAL FIX FOR YOUR OLD HISTORY ---
   factory HistoryItem.fromJson(Map<String, dynamic> json) => HistoryItem(
-    id: json['id'],
+    // If 'id' is missing (old data), create one from the timestamp.
+    id: json['id'] ?? json['timestamp'],
     code: json['code'],
     timestamp: DateTime.parse(json['timestamp']),
+    // If 'isFavorite' is missing (old data), default to false.
     isFavorite: json['isFavorite'] ?? false,
   );
 }
@@ -38,9 +41,15 @@ class HistoryService {
   static Future<List<HistoryItem>> getHistory() async {
     final prefs = await SharedPreferences.getInstance();
     final List<String> historyJson = prefs.getStringList(_historyKey) ?? [];
-    List<HistoryItem> items = historyJson
-        .map((item) => HistoryItem.fromJson(jsonDecode(item)))
-        .toList();
+    List<HistoryItem> items = [];
+    for (var itemString in historyJson) {
+      try {
+        items.add(HistoryItem.fromJson(jsonDecode(itemString)));
+      } catch (e) {
+        // Ignore items that fail to parse (old format without timestamp, etc.)
+        print("Could not parse history item: $itemString");
+      }
+    }
     items.sort((a, b) => b.timestamp.compareTo(a.timestamp)); // Ensure latest is first
     return items;
   }
@@ -51,9 +60,9 @@ class HistoryService {
   }
 
   // ACTIONS
-  static Future<void> addToHistory(String code) async {
+  static Future<HistoryItem> addToHistory(String code) async {
     final allItems = await getHistory();
-    // If an item with the same code exists, remove it to avoid duplicates
+    // If an item with the same code exists, update its timestamp and bring to top
     allItems.removeWhere((item) => item.code == code);
 
     final newItem = HistoryItem(
@@ -61,8 +70,9 @@ class HistoryService {
       code: code,
       timestamp: DateTime.now(),
     );
-    allItems.add(newItem);
+    allItems.insert(0, newItem); // Add to the top of the list
     await _saveItems(allItems);
+    return newItem;
   }
 
   static Future<void> deleteItem(String id) async {

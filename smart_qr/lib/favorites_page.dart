@@ -66,9 +66,12 @@ class _FavoritesPageState extends State<FavoritesPage> {
               ),
               trailing: IconButton(
                 icon: const Icon(Icons.favorite, color: Colors.redAccent),
-                onPressed: () async {
-                  await HistoryService.toggleFavorite(item.id);
-                  _loadFavorites(); // Refresh the list
+                onPressed: () {
+                  // FIX: Update the in-memory list for instant UI feedback
+                  HistoryService.toggleFavorite(item.id);
+                  setState(() {
+                    _favorites.removeAt(index);
+                  });
                 },
               ),
               onTap: () {
@@ -77,7 +80,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
                   MaterialPageRoute(
                     builder: (context) => ResultPage(scannedCode: item.code, historyId: item.id),
                   ),
-                ).then((_) => _loadFavorites());
+                ).then((_) => _loadFavorites()); // Refresh when returning from details
               },
             ),
           );
